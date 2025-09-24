@@ -5,7 +5,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from contextlib import asynccontextmanager
