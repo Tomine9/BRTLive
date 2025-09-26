@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
+import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from contextlib import asynccontextmanager
@@ -90,7 +91,7 @@ class SimpleETACalculator:
         """Main calculation loop with basic error handling"""
         
         self.is_running = True
-        self.logger.info(f"Starting ETA Calculator (interval: {self.calculation_interval}s)")
+        self.logger.info("Starting ETA Calculator (interval: %ds)", self.calculation_interval)
         
         while self.is_running:
             metrics = BasicMetrics()
@@ -109,8 +110,9 @@ class SimpleETACalculator:
                 self.stats['system_status'] = 'healthy'
                 
                 self.logger.info(
-                    f"ETA cycle completed: {metrics.buses_success}/{metrics.buses_found} buses, "
-                    f"{metrics.predictions_made} predictions, {metrics.processing_time:.1f}s"
+                    "ETA cycle completed: %d/%d buses, %d predictions, %.1fs",
+                    metrics.buses_success, metrics.buses_found,
+                    metrics.predictions_made, metrics.processing_time
                 )
                 
             except asyncio.TimeoutError:
@@ -119,7 +121,10 @@ class SimpleETACalculator:
             except ETAError as e:
                 await self._handle_eta_error(e, metrics)
                 
-            except Exception as e:
+            except (sqlalchemy.exc.SQLAlchemyError, ConnectionError) as e:
+                await self._handle_unexpected_error(e, metrics)
+                
+            except ValueError as e:
                 await self._handle_unexpected_error(e, metrics)
             
             finally:
@@ -134,7 +139,7 @@ class SimpleETACalculator:
         await self._calculate_all_etas(metrics)
         
         # Step 2: Broadcast updates to dashboards
-        await self._broadcast_updates(metrics)
+        await self._broadcast_updates()
     
     # =========================================================================
     # ETA CALCULATION - Core logic with better error handling
@@ -154,7 +159,7 @@ class SimpleETACalculator:
                 self.logger.warning("No active buses found")
                 return
             
-            self.logger.info(f"Processing {len(active_buses)} active buses")
+            self.logger.info("Processing %d active buses", len(active_buses))
             
             # Process each bus
             for bus in active_buses:
@@ -164,13 +169,13 @@ class SimpleETACalculator:
                 except ETAError as e:
                     metrics.buses_failed += 1
                     metrics.errors.append(f"Bus {bus.id}: {e.message}")
-                    self.logger.error(f"Bus {bus.bus_number} failed: {e.message}")
+                    self.logger.error("Bus %s failed: %s", bus.bus_number, e.message)
                     continue  # Skip this bus, continue with others
                 
-                except Exception as e:
+                except (sqlalchemy.exc.SQLAlchemyError, ValueError, ConnectionError) as e:
                     metrics.buses_failed += 1
-                    metrics.errors.append(f"Bus {bus.id}: Unexpected error")
-                    self.logger.error(f"Bus {bus.bus_number} unexpected error: {e}")
+                    metrics.errors.append(f"Bus {bus.id}: Database or calculation error")
+                    self.logger.error("Bus %s error: %s", bus.bus_number, e)
                     continue
     
     def _get_active_buses(self, db: Session) -> List[Bus]:
@@ -178,13 +183,13 @@ class SimpleETACalculator:
         try:
             return db.query(Bus).join(Driver).filter(
                 and_(
-                    Bus.is_active == True,
-                    Driver.is_on_duty == True,
+                    Bus.is_active,
+                    Driver.is_on_duty,
                     Bus.current_route_id.isnot(None)
                 )
             ).all()
         except Exception as e:
-            raise ETAError(f"Failed to get active buses: {e}")
+            raise ETAError(f"Failed to get active buses: {e}") from e
     
     async def _process_single_bus(self, bus: Bus, eta_service: ETAService, metrics: BasicMetrics):
         """Process one bus with retry logic"""
@@ -208,38 +213,38 @@ class SimpleETACalculator:
                 metrics.buses_success += 1
                 metrics.predictions_made += len(predictions)
                 
-                self.logger.debug(f"Generated {len(predictions)} ETAs for bus {bus.bus_number}")
+                self.logger.debug("Generated %d ETAs for bus %s", len(predictions), bus.bus_number)
                 return
                 
             except ETAError as e:
                 if attempt < max_retries and "database" in e.message.lower():
                     # Retry database errors
-                    self.logger.warning(f"Retrying bus {bus.bus_number} (attempt {attempt + 1})")
+                    self.logger.warning("Retrying bus %d (attempt %s)", bus.bus_number, attempt + 1)
                     await asyncio.sleep(1)
                     continue
                 else:
                     # Max retries or non-retryable error
                     raise e
             
-            except Exception as e:
+            except (sqlalchemy.exc.SQLAlchemyError, ValueError, ConnectionError, asyncio.TimeoutError) as e:
                 if attempt < max_retries:
                     await asyncio.sleep(1)
                     continue
                 else:
-                    raise ETAError(f"Calculation failed: {e}", bus.id)
+                    raise ETAError(f"Calculation failed: {e}", bus.id) from e
     
     # =========================================================================
     # BROADCASTING - Simplified but robust
     # =========================================================================
     
-    async def _broadcast_updates(self, metrics: BasicMetrics):
+    async def _broadcast_updates(self):
         """Broadcast ETA updates to dashboards"""
         
         async with self._get_db_session() as db:
             try:
                 # Get recent predictions
                 recent_etas = db.query(ETAPrediction).filter(
-                    ETAPrediction.calculated_at >= datetime.utcnow() - timedelta(minutes=2)
+                    ETAPrediction.calculated_at >= datetime.now(timezone.utc) - timedelta(minutes=2)
                 ).all()
                 
                 if not recent_etas:
@@ -254,7 +259,7 @@ class SimpleETACalculator:
                         'type': 'eta_update',
                         'stop_id': stop_id,
                         'etas': etas,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(timezone.utc).isoformat()
                     }
                     
                     try:
@@ -264,7 +269,7 @@ class SimpleETACalculator:
                 
                 self.logger.info(f"Broadcasted to {len(stops_data)} terminals")
                 
-            except Exception as e:
+            except (sqlalchemy.exc.SQLAlchemyError, ConnectionError, ValueError) as e:
                 raise ETAError(f"Broadcast failed: {e}")
     
     def _group_etas_by_stop(self, etas: List[ETAPrediction]) -> Dict[int, List[Dict]]:
@@ -391,13 +396,13 @@ class SimpleETACalculator:
                 return predictions or []
                 
             except Exception as e:
-                self.logger.error(f"Single bus ETA failed for bus {bus_id}: {e}")
-                raise ETAError(f"Single bus calculation failed: {e}", bus_id)
+                self.logger.error("Single bus ETA failed for bus %d: %s", bus_id, e)
+                raise ETAError(f"Single bus calculation failed: {e}", bus_id) from e
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get system statistics"""
         
-        uptime = (datetime.utcnow() - self.stats.get('uptime_start', datetime.utcnow())).total_seconds()
+        uptime = (datetime.now(timezone.utc) - self.stats.get('uptime_start', datetime.now(timezone.utc))).total_seconds()
         
         return {
             **self.stats,

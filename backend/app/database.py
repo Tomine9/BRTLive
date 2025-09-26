@@ -10,9 +10,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# 1. BASIC CONFIGURATION - Essential settings only
-# =============================================================================
+# BASIC CONFIGURATION - Essential settings only
 
 # Database URL from environment variable
 DATABASE_URL = os.getenv(
@@ -24,15 +22,11 @@ DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
 DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
 
-# =============================================================================
-# 2. DATABASE BASE CLASS
-# =============================================================================
+# DATABASE BASE CLASS
 
 Base = declarative_base()
 
-# =============================================================================
-# 3. ENGINE CREATION - Simple but robust
-# =============================================================================
+# ENGINE CREATION - Simple but robust
 
 def create_database_engine():
     """Create database engine with essential configuration"""
@@ -52,26 +46,24 @@ def create_database_engine():
             # Basic connection args
             connect_args={
                 "connect_timeout": 10,
-                "application_name": "BRTLive-Backend"
+                "application_name": "BRTLive"
             },
             
             # Logging (only for development)
             echo=os.getenv("DB_ECHO", "false").lower() == "true"
         )
         
-        logger.info(f"✅ Database engine created successfully")
+        logger.info("✅ Database engine created successfully")
         return Engine
         
     except Exception as e:
-        logger.error(f"❌ Failed to create database engine: {e}")
+        logger.error("❌ Failed to create database engine: %s", e)
         raise
 
 # Create global engine
 engine = create_database_engine()
 
-# =============================================================================
-# 4. SESSION SETUP - Simple session factory
-# =============================================================================
+# SESSION SETUP - Simple session factory
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -79,9 +71,7 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
-# =============================================================================
-# 5. DATABASE DEPENDENCIES - For FastAPI and background tasks
-# =============================================================================
+# DATABASE DEPENDENCIES - For FastAPI and background tasks
 
 def get_db() -> Generator[Session, None, None]:
     """Get database session for FastAPI endpoints"""
@@ -89,7 +79,7 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     except SQLAlchemyError as e:
-        logger.error(f"Database error: {e}")
+        logger.error("Database error: %s", e)
         db.rollback()
         raise
     finally:
@@ -102,11 +92,11 @@ async def get_async_db():
     try:
         yield db
     except SQLAlchemyError as e:
-        logger.error(f"Async database error: {e}")
+        logger.error("Async database error: %s", e)
         db.rollback()
         raise
     except Exception as e:
-        logger.error(f"Unexpected database error: {e}")
+        logger.error("Unexpected database error: %s", e)
         db.rollback()
         raise
     finally:
@@ -116,9 +106,7 @@ def get_db_session() -> Session:
     """Get database session for simple operations"""
     return SessionLocal()
 
-# =============================================================================
-# 6. DATABASE UTILITIES - Essential functions
-# =============================================================================
+# DATABASE UTILITIES - Essential functions
 
 def test_connection() -> bool:
     """Test if database connection works"""
@@ -134,8 +122,11 @@ def test_connection() -> bool:
             logger.error("❌ Database connection test failed")
             return False
             
-    except Exception as e:
-        logger.error(f"❌ Database connection test failed: {e}")
+    except SQLAlchemyError as e:
+        logger.error("❌ Database connection test failed: %s", e)
+        return False
+    except ConnectionError as e:
+        logger.error("❌ Database connection failed: %s", e)
         return False
 
 def create_tables():
@@ -145,7 +136,7 @@ def create_tables():
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
     except Exception as e:
-        logger.error(f"❌ Failed to create tables: {e}")
+        logger.error("❌ Failed to create tables: %s", e)
         raise
 
 def get_connection_status() -> dict:
@@ -176,16 +167,14 @@ def get_connection_status() -> dict:
             "pool_info": pool_info
         }
         
-    except Exception as e:
-        logger.error(f"Failed to get connection status: {e}")
+    except (SQLAlchemyError, ConnectionError) as e:
+        logger.error("Failed to get connection status: %s", e)
         return {
             "status": "unhealthy",
             "error": str(e)
         }
 
-# =============================================================================
-# 7. INITIALIZATION FUNCTION - Setup everything
-# =============================================================================
+# INITIALIZATION FUNCTION - Setup everything
 
 async def init_database():
     """Initialize database - call this on app startup"""
@@ -193,7 +182,7 @@ async def init_database():
     
     # Test connection first
     if not test_connection():
-        raise Exception("Database connection failed")
+        raise SQLAlchemyError("Database connection failed")
     
     # Create tables
     create_tables()

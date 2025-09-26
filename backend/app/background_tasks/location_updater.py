@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -7,6 +7,7 @@ from app.models.bus import Bus
 from app.models.tracking import BusTracking
 from app.core.websocket import websocket_manager
 from app.services.dashboard_service import DashboardService
+from backend.app.main import Terminal
 
 
 class LocationUpdater:
@@ -28,7 +29,15 @@ class LocationUpdater:
         """Process location updates from mobile apps"""
         # This would typically receive GPS data from driver mobile apps
         # via API endpoints and store in BusTracking table
-        pass
+        buses = self.db.query(Bus).all()
+        for bus in buses:
+            # Process and store latest location data
+            tracking = BusTracking(
+                bus_id=bus.id,
+                timestamp=datetime.now(timezone.utc)
+            )
+            self.db.add(tracking)
+        self.db.commit()
     
     async def broadcast_dashboard_updates(self):
         """Broadcast real-time updates to dashboard subscribers"""
