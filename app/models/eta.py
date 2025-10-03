@@ -20,6 +20,7 @@ class Eta(Base):
 
     bus = relationship("Bus", back_populates="eta")
     terminal = relationship("Terminal", back_populates="eta")
-    notifications = relationship('Notification', back_populates='eta')
+    user = relationship("User", back_populates="eta")
+    
 
 

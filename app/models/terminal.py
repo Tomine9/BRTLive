@@ -17,3 +17,4 @@ class Terminal(Base):
     routes_starting = relationship("Route", foreign_keys = "Route.start_terminal_id", back_populates="start_terminal")
     routes_ending = relationship("Route",foreign_keys= "Route.end_terminal_id", back_populates="end_terminal")
     eta = relationship("Eta", back_populates="terminal")
+    user = relationship("User", back_populates="terminals")

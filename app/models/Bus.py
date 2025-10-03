@@ -11,17 +11,24 @@ class BusStatus(Enum):
     MAINTENANCE = "maintenance"
 
 class Bus(Base):
-    __table__name = "buses"
-    id = Column(Integer, primary_key= True , index= True)
-    plate_number = Column(String(25),unique= True , nullable= False)
-    capacity = Column(Integer, default= 50)
+    __tablename__ = "buses"
+    id = Column(Integer, primary_key=True , index=True)
+    plate_number = Column(String(25),unique=True , nullable=False)
+    capacity = Column(Integer, default=50)
     current_passenger_count = Column( Integer, default=0)
     route_id = Column(Integer, ForeignKey("routes.id"))
-    status = Column(Enum(BusStatus), default = BusStatus.OUT_OF_SERVICE)
-    is_active = Column(Boolean, default= True)
-    created_at = Column(DateTime, default= datetime.now(timezone.utc))
+    status = Column(Enum(BusStatus), default=BusStatus.OUT_OF_SERVICE)
+    is_available = Column(Boolean, default=True)
+    current_shift_id = Column(Integer, ForeignKey("bus_assignments.id"))
+    current_driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
 
     route = relationship("Route", back_populates="buses")
-    tracking = relationship("tracking", uselist= False , back_populates= "bus")
-    bus_assignments = relationship("BusAssignment", back_populates= "bus")
-    location_history = relationship ("LocationHistory", back_populates= "bus", order_by= "LocationHistory.timestamp.desc()")
+    tracking = relationship("tracking", uselist=False , back_populates="bus")
+    bus_assignment= relationship("BusAssignment", back_populates="bus")
+    current_driver = relationship("Driver", foreign_keys=[current_driver_id])
+    eta = relationship("Eta", back_populates="bus")
+    admins= relationship("Admin", back_populates="bus")
+    
+
