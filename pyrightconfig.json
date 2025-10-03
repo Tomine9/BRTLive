@@ -1,0 +1,9 @@
+// pyrightconfig.json
+{
+  "executionEnvironments": [
+    {
+      "root": "./",
+      "extraPaths": ["./app"]
+    }
+  ]
+}

@@ -1,22 +1,21 @@
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, String
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from app.database import Base
+from sqlalchemy import Column, Integer, Float, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 
+class BusTracking (Base):
+    __tablename__ = "trackings"
+    id = Column(Integer, primary_key= True , index = True)
+    bus_id = Column(Integer , ForeignKey("buses.id"))
+    route_id = Column(Integer, ForeignKey("routes.id"))
+    longitude = Column(Float , nullable= False)
+    Latitude = Column(Float , nullable= False)
+    speed_km = Column(Float, default= 0.0)
+    heading = Column(Float, nullable= False)
+    last_updated = Column(DateTime, default= datetime.now(timezone.utc), onupdate= datetime.now(timezone.utc))
+    gps_timestamp = Column(DateTime, default= datetime.now(timezone.utc))
+    driver_id = Column(Integer, ForeignKey("drivers.id"), nullable= True)
 
-class BusTracking(Base):
-    __tablename__ = "bus_tracking"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    bus_id = Column(Integer, ForeignKey("buses.id"), nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    speed = Column(Float, default=0.0)
-    heading = Column(Float)  # Direction in degrees
-    altitude = Column(Float)
-    accuracy = Column(Float)  # GPS accuracy in meters
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    source = Column(String(20), default="mobile")  # mobile, gps_device, etc.
-    
-    # Relationships
-    bus = relationship("Bus", back_populates="tracking_records")
+    bus = relationship("Bus", back_populates= "tracking")
+    driver = relationship("Driver", back_populates="tracking")
+
