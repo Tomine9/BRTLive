@@ -27,4 +27,5 @@ class Tracking (Base):
 
     bus = relationship("Bus", back_populates= "tracking")
     driver = relationship("Driver", back_populates="tracking")
+    user = relationship("User", back_populates="tracking")
 

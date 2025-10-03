@@ -17,3 +17,4 @@ class Route(Base):
     end_terminal = relationship("Terminal", foreign_keys=[end_terminal_id], back_populates="routes_ending")
     buses = relationship("Bus", back_populates="route")
     route_stops = relationship("Route_stop", back_populates= "route", order_by= "RouteStop.stop_order")
+    user= relationship("User", back_populates="routes")
