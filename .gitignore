@@ -40,3 +40,10 @@ google-services.json
 /templates
 /tests
 
+.venv/
+venv/
+__pycache__/
+*.__pycache__
+.env
+.DS_Store
+.vscode/
