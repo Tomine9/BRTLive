@@ -127,7 +127,7 @@ class BusTrackingService:
             next_bus_arrival=next_time
         )
     
-    def _get_incoming_buses(self, terminal_id: str)  List[Dict]:
+    def _get_incoming_buses(self, terminal_id: str) -> List[Dict]:
         incoming = []
         terminal = self.terminals[terminal_id]
         
